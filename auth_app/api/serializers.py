@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from auth_app.models import User
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class RegistrationSerializer(serializers.ModelSerializer):
     repeated_password = serializers.CharField(write_only=True)
@@ -34,3 +36,29 @@ class RegistrationSerializer(serializers.ModelSerializer):
         account.set_password(pw)
         account.save()
         return account
+
+
+class CustomTokenObtainPairsSerializer(TokenObtainPairSerializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only= True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if "username" in self.fields:
+            self.fields.pop("username")
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        password = attrs.get("password")
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Ungültige Email oder Passwort")
+
+        if not user.check_password(password):
+            raise serializers.ValidationError("Ungültige Email oder Passwort")
+
+        data = super().validate({"username": user.username, "password": password})
+        return data
